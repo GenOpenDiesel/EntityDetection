@@ -151,9 +151,12 @@ public class EntitySearch extends BukkitRunnable {
 
     public void run() {
         startTime = System.currentTimeMillis();
-        SearchResult<?> result;
-        if(isWorldGuardRegion) result = new WGSearchResult(this);
-        else result = new ChunkSearchResult(this);
+        final SearchResult<?> result;
+        if(isWorldGuardRegion) {
+            result = new WGSearchResult(this);
+        } else {
+            result = new ChunkSearchResult(this);
+        }
 
         for(Entity e : entities) {
             if(!running) {
@@ -173,45 +176,59 @@ public class EntitySearch extends BukkitRunnable {
             }
         }
         
-        // --- POCZĄTEK MODYFIKACJI ---
+        // --- POCZÄ„TEK MODYFIKACJI ---
         // Uruchomienie w głównym wątku serwera, aby uniknąć problemów z API Bukkita
         new BukkitRunnable() {
             @Override
             public void run() {
                 if (result instanceof ChunkSearchResult) {
                     // Kopiujemy mapę, aby uniknąć ConcurrentModificationException
-                    for (SearchResultEntry<ChunkLocation> entry : new ArrayList<>(((ChunkSearchResult) result).resultEntryMap.values())) {
+                    for (final SearchResultEntry<ChunkLocation> entry : new ArrayList<>(((ChunkSearchResult) result).resultEntryMap.values())) {
                         if (entry.getSize() > 500) {
-                            Chunk chunk = entry.getLocation().toBukkit(plugin.getServer());
+                            final Chunk chunk = entry.getLocation().toBukkit(plugin.getServer());
                             
-                            List<Player> playersOnChunk = new ArrayList<>();
+                            final List<String> playerNames = new ArrayList<>();
                             int removedEntities = 0;
 
                             for (Entity entity : chunk.getEntities()) {
                                 if (entity instanceof Player) {
-                                    playersOnChunk.add((Player) entity);
+                                    playerNames.add(entity.getName());
                                 } else {
                                     entity.remove();
                                     removedEntities++;
                                 }
                             }
+                            
+                            final int finalRemovedEntities = removedEntities;
+                            final String locationString = "swiat " + entry.getLocation().getWorld() + " chunk " + entry.getLocation().getX() + " " + entry.getLocation().getZ();
 
-                            String playersString = playersOnChunk.stream().map(Player::getName).collect(Collectors.joining(", "));
-                            String locationString = "chunk " + entry.getLocation().getX() + ", " + entry.getLocation().getZ() + " w świecie " + entry.getLocation().getWorld();
-                            
-                            String helpopMessage = "Na " + locationString + " wykryto " + entry.getSize() + " mobów! Usunięto " + removedEntities + ".";
-                            
-                            if (!playersOnChunk.isEmpty()) {
-                                helpopMessage += " Na chunku byli gracze: " + playersString + ". Jeśli lagowali serwer, rozważ zbanowanie.";
-                                
-                                for (Player player : playersOnChunk) {
-                                    player.sendMessage(ChatColor.RED + "" + ChatColor.BOLD + "[OSTRZEŻENIE] " + ChatColor.RED + "Na chunku, na którym stoisz, wykryto ponad 500 mobów, które zostały automatycznie usunięte. Prosimy o unikanie tworzenia takich sytuacji w przyszłości, aby nie lagować serwera.");
+                            new BukkitRunnable() {
+                                @Override
+                                public void run() {
+                                    // Wyslij ostrzezenie do graczy na chunku
+                                    for (String playerName : playerNames) {
+                                        Player player = Bukkit.getPlayerExact(playerName);
+                                        if (player != null) {
+                                            player.sendMessage(ChatColor.RED + "" + ChatColor.BOLD + "[OSTRZEZENIE] " + ChatColor.RED + "Na chunku na ktorym stoisz wykryto ponad 500 encji ktore zostaly automatycznie usuniete Prosze o unikanie tworzenia takich sytuacji w przyszlosci aby nie lagowac serwera");
+                                        }
+                                    }
+                                    
+                                    // Przygotuj i wyslij wiadomosc helpop
+                                    StringBuilder helpopMessageBuilder = new StringBuilder();
+                                    helpopMessageBuilder.append("Na ").append(locationString).append(" wykryto ").append(entry.getSize()).append(" encji Usunieto ").append(finalRemovedEntities);
+
+                                    if (!playerNames.isEmpty()) {
+                                        helpopMessageBuilder.append(" Na chunku byli gracze ");
+                                        helpopMessageBuilder.append(String.join(" ", playerNames));
+                                    }
+
+                                    String sanitizedMessage = helpopMessageBuilder.toString().replaceAll("[^a-zA-Z0-9 ]", "");
+                                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "helpop " + sanitizedMessage);
+                                    
+                                    // Wyslij informacje do osoby wykonujacej komende
+                                    owner.sendMessage(ChatColor.GREEN + "Wykryto i usunieto " + finalRemovedEntities + " encji na " + locationString);
                                 }
-                            }
-                            
-                            // Wykonanie komendy /helpop przez konsolę
-                            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "helpop " + ChatColor.stripColor(helpopMessage));
-                            owner.sendMessage(ChatColor.GREEN + "Wykryto i usunięto " + removedEntities + " mobów na " + locationString + ".");
+                            }.runTaskLater(plugin, 100L); // 100 tickow = 5 sekund opoznienia
                         }
                     }
                 }
