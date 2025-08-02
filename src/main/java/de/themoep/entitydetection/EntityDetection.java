@@ -1,27 +1,32 @@
-package de.themoep.entitydetection.searcher;
+package de.themoep.entitydetection;
 
-import de.themoep.entitydetection.ChunkLocation;
-import de.themoep.entitydetection.EntityDetection;
-import net.md_5.bungee.api.ChatColor;
-import org.bukkit.Bukkit;
-import org.bukkit.Chunk;
-import org.bukkit.Material;
-import org.bukkit.World;
-import org.bukkit.block.BlockState;
+import de.themoep.entitydetection.commands.ListSubCommand;
+import de.themoep.entitydetection.commands.PluginCommandExecutor;
+import de.themoep.entitydetection.commands.SearchSubCommand;
+import de.themoep.entitydetection.commands.StopSubCommand;
+import de.themoep.entitydetection.commands.TpSubCommand;
+import de.themoep.entitydetection.searcher.EntitySearch;
+import de.themoep.entitydetection.searcher.SearchResult;
+import de.themoep.entitydetection.searcher.SearchResultEntry;
+import de.themoep.entitydetection.searcher.SearchType;
+import de.themoep.minedown.adventure.MineDown;
+import de.themoep.minedown.adventure.Replacer;
+import de.themoep.utils.lang.bukkit.LanguageManager;
+import net.kyori.adventure.text.Component;
 import org.bukkit.command.CommandSender;
+import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.Chunk;
 import org.bukkit.entity.Entity;
-import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.scheduler.BukkitTask;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Copyright 2016 Max Lee (https://github.com/Phoenix616/)
@@ -38,203 +43,176 @@ import java.util.stream.Collectors;
  * You should have received a copy of the Mozilla Public License v2.0
  * along with this program. If not, see <http://mozilla.org/MPL/2.0/>.
  */
-public class EntitySearch extends BukkitRunnable {
-    private final EntityDetection plugin;
-    private final CommandSender owner;
-    private SearchType type = SearchType.CUSTOM;
-    private Set<EntityType> searchedEntities = new HashSet<EntityType>();
-    private Set<Class<?>> searchedBlockStates = new HashSet<Class<?>>();
-    private Set<Material> searchedMaterial = new HashSet<Material>();
-    private long startTime;
-    private boolean running = true;
-    private List<Entity> entities = new ArrayList<Entity>();
-    private List<BlockState> blockStates = new ArrayList<BlockState>();
+public class EntityDetection extends JavaPlugin {
+    private LanguageManager lang;
 
-    private boolean isWorldGuardRegion = false;
+    private EntitySearch currentSearch;
 
-    public EntitySearch(EntityDetection plugin, CommandSender sender) {
-        this.plugin = plugin;
-        owner = sender;
+    private Map<SearchType, SearchResult<?>> results = new HashMap<>();
+    private Map<String, SearchResult<?>> customResults = new HashMap<>();
+    private Map<String, SearchResult<?>> lastResultViewed = new HashMap<>();
+
+    public void onEnable() {
+        lang = new LanguageManager(this, System.getProperty("de.themoep.entitydetection.default-language", "en"));
+        PluginCommandExecutor cmdEx = new PluginCommandExecutor(this);
+        cmdEx.register(new SearchSubCommand(this));
+        cmdEx.register(new TpSubCommand(this));
+        cmdEx.register(new ListSubCommand(this));
+        cmdEx.register(new StopSubCommand(this));
     }
 
-    public SearchType getType() {
-        return type;
+    public String getRawMessage(CommandSender sender, String key, String... replacements) {
+        return lang.getConfig(sender).get(key, replacements);
     }
 
-    public void setType(SearchType type) {
-        if(getSearchedEntities().size() == 0 && getSearchedBlockStates().size() == 0 && getSearchedMaterial().size() == 0) {
-            this.type = type;
+    public Component getMessage(CommandSender sender, String key, String... replacements) {
+        return MineDown.parse(getRawMessage(sender, key, replacements));
+    }
+
+    public boolean startSearch(EntitySearch search) {
+        if(currentSearch != null && currentSearch.isRunning()) {
+            return false;
+        }
+        currentSearch = search;
+        return search.start() != null;
+    }
+
+    public boolean stopSearch(String stopper) {
+        if(currentSearch == null || !currentSearch.isRunning()) {
+            return false;
+        }
+        currentSearch.stop(stopper);
+        clearCurrentSearch();
+        return true;
+    }
+
+    public void addResult(SearchResult<?> result) {
+        if(result.getType() == SearchType.CUSTOM && result.getSearched().size() == 1) {
+            Set<String> searchedEntities = result.getSearched();
+            customResults.put(searchedEntities.toArray(new String[searchedEntities.size()])[0], result);
         } else {
-            this.type = SearchType.CUSTOM;
-        }
-        Collections.addAll(searchedEntities, type.getEntities());
-        Collections.addAll(searchedBlockStates, type.getBlockStates());
-    }
-
-    public void addSearchedType(EntityType type) {
-        searchedEntities.add(type);
-        this.type = SearchType.CUSTOM;
-    }
-
-    public void addSearchedBlockState(Class<?> c) {
-        searchedBlockStates.add(c);
-        this.type = SearchType.CUSTOM;
-    }
-
-    public void addSearchedMaterial(Material material) {
-        searchedMaterial.add(material);
-        this.type = SearchType.CUSTOM;
-    }
-
-    public Set<EntityType> getSearchedEntities() {
-        return searchedEntities;
-    }
-
-    public Set<Class<?>> getSearchedBlockStates() {
-        return searchedBlockStates;
-    }
-
-    public Set<Material> getSearchedMaterial() {
-        return searchedMaterial;
-    }
-
-    public String getOwner() {
-        return owner.getName();
-    }
-
-    public long getStartTime() {
-        return startTime;
-    }
-
-    public boolean isWorldGuardRegion() {
-        return this.isWorldGuardRegion;
-    }
-
-    public void setWorldGuardRegion(boolean value) {
-        this.isWorldGuardRegion = value;
-    }
-    /**
-     * Get the duration since this search started
-     * @return The duration in seconds
-     */
-    public long getDuration() {
-        return (System.currentTimeMillis() - getStartTime()) / 1000;
-    }
-
-    public BukkitTask start() {
-        if (searchedEntities.size() > 0) {
-            for (World world : plugin.getServer().getWorlds()) {
-                entities.addAll(world.getEntities());
-            }
-        }
-        if (searchedBlockStates.size() > 0 || searchedMaterial.size() > 0) {
-            for (World world : plugin.getServer().getWorlds()) {
-                for (Chunk chunk : world.getLoadedChunks()) {
-                    blockStates.addAll(Arrays.asList(chunk.getTileEntities()));
-                }
-            }
-        }
-        return runTaskAsynchronously(plugin);
-    }
-
-    public boolean isRunning() {
-        return running;
-    }
-
-    public void stop(String name) {
-        running = false;
-        cancel();
-        if(!owner.getName().equals(name)) {
-            owner.sendMessage(ChatColor.YELLOW + name + ChatColor.RED + " stopped your " + getType() + " search after " + getDuration() + "s!");
+            results.put(result.getType(), result);
         }
     }
 
-    public void run() {
-        startTime = System.currentTimeMillis();
-        final SearchResult<?> result;
-        if(isWorldGuardRegion) {
-            result = new WGSearchResult(this);
-        } else {
-            result = new ChunkSearchResult(this);
-        }
+    public void clearCurrentSearch() {
+        currentSearch = null;
+    }
 
-        for(Entity e : entities) {
-            if(!running) {
-                return;
-            }
-            if(searchedEntities.contains(e.getType())) {
-                result.addEntity(e);
-            }
-        }
+    public EntitySearch getCurrentSearch() {
+        return currentSearch;
+    }
 
-        for (BlockState blockState : blockStates) {
-            if (!running) {
-                return;
-            }
-            if (searchedBlockStates.contains(BlockState.class) || searchedMaterial.contains(blockState.getType()) || searchedBlockStates.contains(blockState.getClass())) {
-                result.addBlockState(blockState);
-            }
-        }
+    public void send(CommandSender sender, SearchResult<?> result) {
+        send(sender, result, 0);
+    }
 
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (result instanceof ChunkSearchResult) {
-                    for (final SearchResultEntry<ChunkLocation> entry : new ArrayList<>(((ChunkSearchResult) result).resultEntryMap.values())) {
-                        if (entry.getSize() > 500) {
-                            final Chunk chunk = entry.getLocation().toBukkit(plugin.getServer());
-                            final List<String> playerNames = new ArrayList<>();
-                            int removedEntities = 0;
 
-                            for (Entity entity : chunk.getEntities()) {
-                                if (entity instanceof Player) {
-                                    playerNames.add(entity.getName());
-                                } else {
-                                    entity.remove();
-                                    removedEntities++;
+    public void send(CommandSender sender, SearchResult<?> result, int page) {
+        lastResultViewed.put(sender.getName(), result);
+
+        // =========================================================================================
+        // POCZÄ„TEK MODYFIKACJI - Automatyczne powiadomienie dla >500 encji
+        // Ta logika jest wywoĹ‚ywana tylko raz, zaraz po zakoĹ„czeniu wyszukiwania.
+        // =========================================================================================
+        if (page == 0) { // Uruchom tylko przy pierwszym wyĹ›wietleniu wyniku (zaraz po wyszukiwaniu)
+            List<? extends SearchResultEntry<?>> sortedEntries = result.getSortedEntries();
+            if (sortedEntries.size() > 0) {
+                for (SearchResultEntry<?> entry : sortedEntries) {
+                    if (entry.getSize() > 500) {
+                        String mostCommonEntityType = "N/A";
+                        if (!entry.getEntryCount().isEmpty()) {
+                            mostCommonEntityType = Utils.enumToHumanName(entry.getEntryCount().get(0).getKey());
+                        }
+
+                        String message = "Na chunku " + entry.getLocation().toString() + " jest >500 rzeczy (" + entry.getSize() + ", glownie: " + mostCommonEntityType + ").";
+
+                        if (entry.getLocation() instanceof ChunkLocation) {
+                            ChunkLocation chunkLoc = (ChunkLocation) entry.getLocation();
+                            try {
+                                Chunk chunk = chunkLoc.toBukkit(getServer());
+                                boolean playerFound = false;
+                                for (Entity entity : chunk.getEntities()) {
+                                    if (entity instanceof Player) {
+                                        Player player = (Player) entity;
+                                        String playerInfo = " Na tym chunku jest osoba \"" + player.getName() + "\" i jej kordynaty to takie: " + player.getLocation().getBlockX() + ", " + player.getLocation().getBlockY() + ", " + player.getLocation().getBlockZ();
+                                        getServer().dispatchCommand(getServer().getConsoleSender(), "helpop " + message + playerInfo);
+                                        playerFound = true;
+                                    }
                                 }
+                                if (!playerFound) {
+                                     getServer().dispatchCommand(getServer().getConsoleSender(), "helpop " + message + " Na tym chunku nie ma zadnego gracza.");
+                                }
+                            } catch (IllegalArgumentException e) {
+                                getServer().dispatchCommand(getServer().getConsoleSender(), "helpop " + message + " Swiat tego chunka nie jest zaladowany.");
                             }
-
-                            final int finalRemovedEntities = removedEntities;
-                            final String locationString = "swiat " + entry.getLocation().getWorld() + " chunk " + entry.getLocation().getX() + " " + entry.getLocation().getZ();
-
-                            new BukkitRunnable() {
-                                @Override
-                                public void run() {
-                                    // Send warning to players on the chunk
-                                    for (String playerName : playerNames) {
-                                        Player player = Bukkit.getPlayerExact(playerName);
-                                        if (player != null) {
-                                            player.sendMessage(ChatColor.RED + "" + ChatColor.BOLD + "[OSTRZEZENIE] " + ChatColor.RED + "Na chunku na ktorym stoisz wykryto ponad 500 encji ktore zostaly automatycznie usuniete Prosze o unikanie tworzenia takich sytuacji w przyszlosci aby nie lagowac serwera");
-                                        }
-                                    }
-                                    
-                                    // Prepare and send helpop message
-                                    StringBuilder helpopMessageBuilder = new StringBuilder();
-                                    helpopMessageBuilder.append("Na ").append(locationString).append(" wykryto ").append(entry.getSize()).append(" encji Usunieto ").append(finalRemovedEntities);
-
-                                    if (!playerNames.isEmpty()) {
-                                        helpopMessageBuilder.append(" Na chunku byli gracze ");
-                                        helpopMessageBuilder.append(String.join(" ", playerNames));
-                                    }
-
-                                    String sanitizedMessage = helpopMessageBuilder.toString().replaceAll("[^a-zA-Z0-9 ]", "");
-                                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "helpop " + sanitizedMessage);
-                                    
-                                    // Send confirmation to the command sender
-                                    owner.sendMessage(ChatColor.GREEN + "Wykryto i usunieto " + finalRemovedEntities + " encji na " + locationString);
-                                }
-                            }.runTaskLater(plugin, 100L); // 100 ticks = 5 seconds delay
                         }
                     }
                 }
-
-                result.sort();
-                plugin.addResult(result);
-                plugin.send(owner, result);
-                running = false;
-                plugin.clearCurrentSearch();
             }
-        }.runTask(plugin);
+        }
+        // =========================================================================================
+        // KONIEC MODYFIKACJI
+        // =========================================================================================
+
+
+        String dateStr = new SimpleDateFormat(getRawMessage(sender, "result.time-format")).format(new Date(result.getEndTime()));
+
+        int start = page * 10;
+        Component searchedTypes = getMessage(sender, "result.searched-types.head");
+        Iterator<String> typeIter = result.getSearched().iterator();
+        while (typeIter.hasNext()) {
+            searchedTypes = searchedTypes.append(Component.newline())
+                    .append(getMessage(sender, "result.searched-types.entry", "type", Utils.enumToHumanName(typeIter.next())));
+        }
+
+        Component message = getMessage(sender, "result.head", "type", Utils.enumToHumanName(result.getType()), "timestamp", dateStr);
+        message = Replacer.replaceIn(message, "searchedtypes", searchedTypes);
+
+        List<? extends SearchResultEntry<?>> results = result.getSortedEntries();
+        if (results.size() > 0) {
+            for (int line = start; line < start + 10 && line < results.size(); line++) {
+                SearchResultEntry<?> entry = results.get(line);
+
+                Component resultLine = getMessage(sender, "result.entry",
+                        "line", String.valueOf(line + 1),
+                        "location", String.valueOf(entry.getLocation()),
+                        "size", String.valueOf(entry.getSize())
+                );
+
+                Component entityCounts = Component.empty();
+                int entitiesListed = 0;
+                for(Entry<String, Integer> entityEntry : entry.getEntryCount()) {
+                    entityCounts = entityCounts.append(getMessage(sender, "result.entity-count",
+                            "type", Utils.enumToHumanName(entityEntry.getKey()),
+                            "count", String.valueOf(entityEntry.getValue())
+                    ));
+
+                    entitiesListed++;
+                    if(entitiesListed >= 3)
+                        break;
+                }
+
+                resultLine = Replacer.replaceIn(resultLine, "entitycounts", entityCounts);
+
+                message = message.append(Component.newline()).append(resultLine);
+            }
+        } else {
+            message = message.append(Component.newline()).append(getMessage(sender, "result.no-entries"));
+        }
+
+        sender.sendMessage(message);
+    }
+
+    public SearchResult<?> getResult(CommandSender sender) {
+        return lastResultViewed.get(sender.getName());
+    }
+
+    public SearchResult<?> getResult(String type) {
+        return customResults.get(type);
+    }
+
+    public SearchResult<?> getResult(SearchType type) {
+        return results.get(type);
     }
 }
