@@ -2,6 +2,7 @@ package de.themoep.entitydetection.searcher;
 
 import de.themoep.entitydetection.ChunkLocation;
 import de.themoep.entitydetection.EntityDetection;
+import de.themoep.entitydetection.Utils;
 import net.md_5.bungee.api.ChatColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
@@ -20,6 +21,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -176,7 +178,7 @@ public class EntitySearch extends BukkitRunnable {
             }
         }
         
-        // --- POCZÄ„TEK MODYFIKACJI ---
+        // --- POCZĄTEK MODYFIKACJI ---
         // Uruchomienie w głównym wątku serwera, aby uniknąć problemów z API Bukkita
         new BukkitRunnable() {
             @Override
@@ -184,51 +186,61 @@ public class EntitySearch extends BukkitRunnable {
                 if (result instanceof ChunkSearchResult) {
                     // Kopiujemy mapę, aby uniknąć ConcurrentModificationException
                     for (final SearchResultEntry<ChunkLocation> entry : new ArrayList<>(((ChunkSearchResult) result).resultEntryMap.values())) {
-                        if (entry.getSize() > 500) {
-                            final Chunk chunk = entry.getLocation().toBukkit(plugin.getServer());
-                            
-                            final List<String> playerNames = new ArrayList<>();
-                            int removedEntities = 0;
+                        entry.sort(); // Upewnijmy się, że lista typów jest posortowana
+                        for (Map.Entry<String, Integer> entityTypeEntry : entry.getEntryCount()) {
+                            if (entityTypeEntry.getValue() > 500) {
+                                final String entityTypeToRemove = entityTypeEntry.getKey();
+                                final Chunk chunk = entry.getLocation().toBukkit(plugin.getServer());
+                                final List<String> playerNames = new ArrayList<>();
+                                int removedEntities = 0;
 
-                            for (Entity entity : chunk.getEntities()) {
-                                if (entity instanceof Player) {
-                                    playerNames.add(entity.getName());
-                                } else {
-                                    entity.remove();
-                                    removedEntities++;
+                                // Najpierw zbierz graczy
+                                for (Entity entity : chunk.getEntities()) {
+                                    if (entity instanceof Player) {
+                                        playerNames.add(entity.getName());
+                                    }
                                 }
-                            }
-                            
-                            final int finalRemovedEntities = removedEntities;
-                            final String locationString = "swiat " + entry.getLocation().getWorld() + " chunk " + entry.getLocation().getX() + " " + entry.getLocation().getZ();
+                                
+                                // Następnie usuń odpowiednie encje
+                                for (Entity entity : chunk.getEntities()) {
+                                    if (entity.getType().toString().equals(entityTypeToRemove) && !(entity instanceof Player)) {
+                                        entity.remove();
+                                        removedEntities++;
+                                    }
+                                }
 
-                            new BukkitRunnable() {
-                                @Override
-                                public void run() {
-                                    // Wyslij ostrzezenie do graczy na chunku
-                                    for (String playerName : playerNames) {
-                                        Player player = Bukkit.getPlayerExact(playerName);
-                                        if (player != null) {
-                                            player.sendMessage(ChatColor.RED + "" + ChatColor.BOLD + "[OSTRZEZENIE] " + ChatColor.RED + "Na chunku na ktorym stoisz wykryto ponad 500 encji ktore zostaly automatycznie usuniete Prosze o unikanie tworzenia takich sytuacji w przyszlosci aby nie lagowac serwera");
+                                final int finalRemovedEntities = removedEntities;
+                                final String locationString = "swiat " + entry.getLocation().getWorld() + " chunk " + entry.getLocation().getX() + " " + entry.getLocation().getZ();
+                                final String humanReadableEntityType = Utils.enumToHumanName(entityTypeToRemove);
+
+                                new BukkitRunnable() {
+                                    @Override
+                                    public void run() {
+                                        // Wyślij ostrzeżenie do graczy na chunku
+                                        for (String playerName : playerNames) {
+                                            Player player = Bukkit.getPlayerExact(playerName);
+                                            if (player != null) {
+                                                player.sendMessage(ChatColor.RED + "" + ChatColor.BOLD + "[OSTRZEZENIE] " + ChatColor.RED + "Na chunku, na którym stoisz, wykryto ponad 500 jednostek typu " + humanReadableEntityType + ", które zostały automatycznie usunięte. Prosimy o unikanie tworzenia takich sytuacji w przyszłości, aby nie lagować serwera.");
+                                            }
                                         }
-                                    }
-                                    
-                                    // Przygotuj i wyslij wiadomosc helpop
-                                    StringBuilder helpopMessageBuilder = new StringBuilder();
-                                    helpopMessageBuilder.append("Na ").append(locationString).append(" wykryto ").append(entry.getSize()).append(" encji Usunieto ").append(finalRemovedEntities);
 
-                                    if (!playerNames.isEmpty()) {
-                                        helpopMessageBuilder.append(" Na chunku byli gracze ");
-                                        helpopMessageBuilder.append(String.join(" ", playerNames));
-                                    }
+                                        // Przygotuj i wyślij wiadomość helpop
+                                        StringBuilder helpopMessageBuilder = new StringBuilder();
+                                        helpopMessageBuilder.append("Na ").append(locationString).append(" wykryto ").append(entityTypeEntry.getValue()).append(" jednostek typu ").append(humanReadableEntityType).append(". Usunięto ").append(finalRemovedEntities).append(".");
 
-                                    String sanitizedMessage = helpopMessageBuilder.toString().replaceAll("[^a-zA-Z0-9 ]", "");
-                                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "helpop " + sanitizedMessage);
-                                    
-                                    // Wyslij informacje do osoby wykonujacej komende
-                                    owner.sendMessage(ChatColor.GREEN + "Wykryto i usunieto " + finalRemovedEntities + " encji na " + locationString);
-                                }
-                            }.runTaskLater(plugin, 100L); // 100 tickow = 5 sekund opoznienia
+                                        if (!playerNames.isEmpty()) {
+                                            helpopMessageBuilder.append(" Na chunku byli gracze: ");
+                                            helpopMessageBuilder.append(String.join(", ", playerNames)).append(".");
+                                        }
+
+                                        String sanitizedMessage = helpopMessageBuilder.toString().replaceAll("[^a-zA-Z0-9ąćęłńóśźżĄĆĘŁŃÓŚŹŻ .,:]", "");
+                                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "helpop " + sanitizedMessage);
+
+                                        // Wyślij informację do osoby wykonującej komendę
+                                        owner.sendMessage(ChatColor.GREEN + "Wykryto i usunięto " + finalRemovedEntities + " jednostek typu " + humanReadableEntityType + " na " + locationString);
+                                    }
+                                }.runTaskLater(plugin, 100L); // 100 ticków = 5 sekund opóźnienia
+                            }
                         }
                     }
                 }
