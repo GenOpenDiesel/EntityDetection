@@ -1,7 +1,9 @@
 package de.themoep.entitydetection.searcher;
 
+import de.themoep.entitydetection.ChunkLocation;
 import de.themoep.entitydetection.EntityDetection;
 import net.md_5.bungee.api.ChatColor;
+import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -9,6 +11,7 @@ import org.bukkit.block.BlockState;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
+import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -18,6 +21,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Copyright 2016 Max Lee (https://github.com/Phoenix616/)
@@ -168,11 +172,58 @@ public class EntitySearch extends BukkitRunnable {
                 result.addBlockState(blockState);
             }
         }
+        
+        // --- POCZĄTEK MODYFIKACJI ---
+        // Uruchomienie w głównym wątku serwera, aby uniknąć problemów z API Bukkita
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (result instanceof ChunkSearchResult) {
+                    // Kopiujemy mapę, aby uniknąć ConcurrentModificationException
+                    for (SearchResultEntry<ChunkLocation> entry : new ArrayList<>(((ChunkSearchResult) result).resultEntryMap.values())) {
+                        if (entry.getSize() > 500) {
+                            Chunk chunk = entry.getLocation().toBukkit(plugin.getServer());
+                            
+                            List<Player> playersOnChunk = new ArrayList<>();
+                            int removedEntities = 0;
 
-        result.sort();
-        plugin.addResult(result);
-        plugin.send(owner, result);
-        running = false;
-        plugin.clearCurrentSearch();
+                            for (Entity entity : chunk.getEntities()) {
+                                if (entity instanceof Player) {
+                                    playersOnChunk.add((Player) entity);
+                                } else {
+                                    entity.remove();
+                                    removedEntities++;
+                                }
+                            }
+
+                            String playersString = playersOnChunk.stream().map(Player::getName).collect(Collectors.joining(", "));
+                            String locationString = "chunk " + entry.getLocation().getX() + ", " + entry.getLocation().getZ() + " w świecie " + entry.getLocation().getWorld();
+                            
+                            String helpopMessage = "Na " + locationString + " wykryto " + entry.getSize() + " mobów! Usunięto " + removedEntities + ".";
+                            
+                            if (!playersOnChunk.isEmpty()) {
+                                helpopMessage += " Na chunku byli gracze: " + playersString + ". Jeśli lagowali serwer, rozważ zbanowanie.";
+                                
+                                for (Player player : playersOnChunk) {
+                                    player.sendMessage(ChatColor.RED + "" + ChatColor.BOLD + "[OSTRZEŻENIE] " + ChatColor.RED + "Na chunku, na którym stoisz, wykryto ponad 500 mobów, które zostały automatycznie usunięte. Prosimy o unikanie tworzenia takich sytuacji w przyszłości, aby nie lagować serwera.");
+                                }
+                            }
+                            
+                            // Wykonanie komendy /helpop przez konsolę
+                            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "helpop " + ChatColor.stripColor(helpopMessage));
+                            owner.sendMessage(ChatColor.GREEN + "Wykryto i usunięto " + removedEntities + " mobów na " + locationString + ".");
+                        }
+                    }
+                }
+
+                // Kontynuacja oryginalnej logiki po zakończeniu naszej modyfikacji
+                result.sort();
+                plugin.addResult(result);
+                plugin.send(owner, result);
+                running = false;
+                plugin.clearCurrentSearch();
+            }
+        }.runTask(plugin);
+        // --- KONIEC MODYFIKACJI ---
     }
 }
