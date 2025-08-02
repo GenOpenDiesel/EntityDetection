@@ -8,7 +8,6 @@ on:
 
 jobs:
   build:
-    # Uruchom na najnowszej dostępnej maszynie z systemem Ubuntu
     runs-on: ubuntu-latest
 
     steps:
@@ -21,16 +20,19 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: '21'
-          distribution: 'temurin' # Popularna i darmowa dystrybucja Javy
-          cache: 'maven' # Włącz buforowanie (cache) dla Mavena, aby przyspieszyć przyszłe buildy
+          distribution: 'temurin'
+          cache: 'maven'
 
       # 3. Zbuduj projekt za pomocą Mavena
       - name: Build with Maven
         run: mvn -B package --file pom.xml
 
-      # (Opcjonalnie) Możesz dodać tutaj kolejne kroki, np. do wysyłania zbudowanego pliku .jar
-      # - name: Upload artifact
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: package
-      #     path: target/*.jar
+      # 4. Zapisz zbudowany plik .jar jako artefakt do pobrania
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          # Nazwa, pod jaką plik będzie widoczny do pobrania
+          name: EntityDetection-Plugin
+          # Ścieżka do pliku, który ma zostać zapisany.
+          # Używamy gwiazdki (*), aby pasowało do każdej nazwy pliku .jar w folderze target.
+          path: target/*.jar
