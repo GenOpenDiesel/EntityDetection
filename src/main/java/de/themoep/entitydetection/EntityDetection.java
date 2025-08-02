@@ -15,6 +15,9 @@ import de.themoep.utils.lang.bukkit.LanguageManager;
 import net.kyori.adventure.text.Component;
 import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.Chunk;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -107,6 +110,51 @@ public class EntityDetection extends JavaPlugin {
 
     public void send(CommandSender sender, SearchResult<?> result, int page) {
         lastResultViewed.put(sender.getName(), result);
+
+        // =========================================================================================
+        // POCZĄTEK MODYFIKACJI - Automatyczne powiadomienie dla >500 encji
+        // Ta logika jest wywoływana tylko raz, zaraz po zakończeniu wyszukiwania.
+        // =========================================================================================
+        if (page == 0) { // Uruchom tylko przy pierwszym wyświetleniu wyniku (zaraz po wyszukiwaniu)
+            List<? extends SearchResultEntry<?>> sortedEntries = result.getSortedEntries();
+            if (sortedEntries.size() > 0) {
+                for (SearchResultEntry<?> entry : sortedEntries) {
+                    if (entry.getSize() > 500) {
+                        String mostCommonEntityType = "N/A";
+                        if (!entry.getEntryCount().isEmpty()) {
+                            mostCommonEntityType = Utils.enumToHumanName(entry.getEntryCount().get(0).getKey());
+                        }
+
+                        String message = "Na chunku " + entry.getLocation().toString() + " jest >500 rzeczy (" + entry.getSize() + ", glownie: " + mostCommonEntityType + ").";
+
+                        if (entry.getLocation() instanceof ChunkLocation) {
+                            ChunkLocation chunkLoc = (ChunkLocation) entry.getLocation();
+                            try {
+                                Chunk chunk = chunkLoc.toBukkit(getServer());
+                                boolean playerFound = false;
+                                for (Entity entity : chunk.getEntities()) {
+                                    if (entity instanceof Player) {
+                                        Player player = (Player) entity;
+                                        String playerInfo = " Na tym chunku jest osoba \"" + player.getName() + "\" i jej kordynaty to takie: " + player.getLocation().getBlockX() + ", " + player.getLocation().getBlockY() + ", " + player.getLocation().getBlockZ();
+                                        getServer().dispatchCommand(getServer().getConsoleSender(), "helpop " + message + playerInfo);
+                                        playerFound = true;
+                                    }
+                                }
+                                if (!playerFound) {
+                                     getServer().dispatchCommand(getServer().getConsoleSender(), "helpop " + message + " Na tym chunku nie ma zadnego gracza.");
+                                }
+                            } catch (IllegalArgumentException e) {
+                                getServer().dispatchCommand(getServer().getConsoleSender(), "helpop " + message + " Swiat tego chunka nie jest zaladowany.");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // =========================================================================================
+        // KONIEC MODYFIKACJI
+        // =========================================================================================
+
 
         String dateStr = new SimpleDateFormat(getRawMessage(sender, "result.time-format")).format(new Date(result.getEndTime()));
 
