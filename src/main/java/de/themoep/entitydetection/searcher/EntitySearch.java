@@ -1,10 +1,7 @@
 package de.themoep.entitydetection.searcher;
 
-import de.themoep.entitydetection.ChunkLocation;
 import de.themoep.entitydetection.EntityDetection;
-import de.themoep.entitydetection.Utils;
 import net.md_5.bungee.api.ChatColor;
-import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -12,7 +9,6 @@ import org.bukkit.block.BlockState;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
-import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -21,9 +17,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Copyright 2016 Max Lee (https://github.com/Phoenix616/)
@@ -51,6 +45,7 @@ public class EntitySearch extends BukkitRunnable {
     private boolean running = true;
     private List<Entity> entities = new ArrayList<Entity>();
     private List<BlockState> blockStates = new ArrayList<BlockState>();
+    private String worldName;
 
     private boolean isWorldGuardRegion = false;
 
@@ -115,6 +110,10 @@ public class EntitySearch extends BukkitRunnable {
     public void setWorldGuardRegion(boolean value) {
         this.isWorldGuardRegion = value;
     }
+
+    public void setWorld(String worldName) {
+        this.worldName = worldName;
+    }
     /**
      * Get the duration since this search started
      * @return The duration in seconds
@@ -124,13 +123,23 @@ public class EntitySearch extends BukkitRunnable {
     }
 
     public BukkitTask start() {
+        List<World> worldsToSearch = new ArrayList<>();
+        if (worldName != null) {
+            World world = plugin.getServer().getWorld(worldName);
+            if (world != null) {
+                worldsToSearch.add(world);
+            }
+        } else {
+            worldsToSearch.addAll(plugin.getServer().getWorlds());
+        }
+
         if (searchedEntities.size() > 0) {
-            for (World world : plugin.getServer().getWorlds()) {
+            for (World world : worldsToSearch) {
                 entities.addAll(world.getEntities());
             }
         }
         if (searchedBlockStates.size() > 0 || searchedMaterial.size() > 0) {
-            for (World world : plugin.getServer().getWorlds()) {
+            for (World world : worldsToSearch) {
                 for (Chunk chunk : world.getLoadedChunks()) {
                     blockStates.addAll(Arrays.asList(chunk.getTileEntities()));
                 }
@@ -177,75 +186,10 @@ public class EntitySearch extends BukkitRunnable {
                 result.addBlockState(blockState);
             }
         }
-        
-        // --- POCZĄTEK MODYFIKACJI ---
-        // Uruchomienie w głównym wątku serwera, aby uniknąć problemów z API Bukkita
+
         new BukkitRunnable() {
             @Override
             public void run() {
-                if (result instanceof ChunkSearchResult) {
-                    // Kopiujemy mapę, aby uniknąć ConcurrentModificationException
-                    for (final SearchResultEntry<ChunkLocation> entry : new ArrayList<>(((ChunkSearchResult) result).resultEntryMap.values())) {
-                        entry.sort(); // Upewnijmy się, że lista typów jest posortowana
-                        for (Map.Entry<String, Integer> entityTypeEntry : entry.getEntryCount()) {
-                            if (entityTypeEntry.getValue() > 500) {
-                                final String entityTypeToRemove = entityTypeEntry.getKey();
-                                final Chunk chunk = entry.getLocation().toBukkit(plugin.getServer());
-                                final List<String> playerNames = new ArrayList<>();
-                                int removedEntities = 0;
-
-                                // Najpierw zbierz graczy
-                                for (Entity entity : chunk.getEntities()) {
-                                    if (entity instanceof Player) {
-                                        playerNames.add(entity.getName());
-                                    }
-                                }
-                                
-                                // Następnie usuń odpowiednie encje
-                                for (Entity entity : chunk.getEntities()) {
-                                    if (entity.getType().toString().equals(entityTypeToRemove) && !(entity instanceof Player)) {
-                                        entity.remove();
-                                        removedEntities++;
-                                    }
-                                }
-
-                                final int finalRemovedEntities = removedEntities;
-                                final String locationString = "swiat " + entry.getLocation().getWorld() + " chunk " + entry.getLocation().getX() + " " + entry.getLocation().getZ();
-                                final String humanReadableEntityType = Utils.enumToHumanName(entityTypeToRemove);
-
-                                new BukkitRunnable() {
-                                    @Override
-                                    public void run() {
-                                        // Wyślij ostrzeżenie do graczy na chunku
-                                        for (String playerName : playerNames) {
-                                            Player player = Bukkit.getPlayerExact(playerName);
-                                            if (player != null) {
-                                                player.sendMessage(ChatColor.RED + "" + ChatColor.BOLD + "[OSTRZEZENIE] " + ChatColor.RED + "Na chunku, na którym stoisz, wykryto ponad 500 jednostek typu " + humanReadableEntityType + ", które zostały automatycznie usunięte. Prosimy o unikanie tworzenia takich sytuacji w przyszłości, aby nie lagować serwera.");
-                                            }
-                                        }
-
-                                        // Przygotuj i wyślij wiadomość helpop
-                                        StringBuilder helpopMessageBuilder = new StringBuilder();
-                                        helpopMessageBuilder.append("Na ").append(locationString).append(" wykryto ").append(entityTypeEntry.getValue()).append(" jednostek typu ").append(humanReadableEntityType).append(". Usunięto ").append(finalRemovedEntities).append(".");
-
-                                        if (!playerNames.isEmpty()) {
-                                            helpopMessageBuilder.append(" Na chunku byli gracze: ");
-                                            helpopMessageBuilder.append(String.join(", ", playerNames)).append(".");
-                                        }
-
-                                        String sanitizedMessage = helpopMessageBuilder.toString().replaceAll("[^a-zA-Z0-9ąćęłńóśźżĄĆĘŁŃÓŚŹŻ .,:]", "");
-                                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "helpop " + sanitizedMessage);
-
-                                        // Wyślij informację do osoby wykonującej komendę
-                                        owner.sendMessage(ChatColor.GREEN + "Wykryto i usunięto " + finalRemovedEntities + " jednostek typu " + humanReadableEntityType + " na " + locationString);
-                                    }
-                                }.runTaskLater(plugin, 100L); // 100 ticków = 5 sekund opóźnienia
-                            }
-                        }
-                    }
-                }
-
-                // Kontynuacja oryginalnej logiki po zakończeniu naszej modyfikacji
                 result.sort();
                 plugin.addResult(result);
                 plugin.send(owner, result);
@@ -253,6 +197,5 @@ public class EntitySearch extends BukkitRunnable {
                 plugin.clearCurrentSearch();
             }
         }.runTask(plugin);
-        // --- KONIEC MODYFIKACJI ---
     }
 }
