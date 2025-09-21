@@ -10,6 +10,10 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.EntityType;
 import org.bukkit.plugin.Plugin;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 /**
  * Copyright 2016 Max Lee (https://github.com/Phoenix616/)
  * <p/>
@@ -28,15 +32,34 @@ import org.bukkit.plugin.Plugin;
 public class SearchSubCommand extends SubCommand {
     public SearchSubCommand(EntityDetection plugin) {
         super(plugin, plugin.getName().toLowerCase(), "search",
-                "[monster|passive|misc|block|tile|entity|all|<type>]"
+                "[monster|passive|misc|block|tile|entity|all|<type>] [--world <worldname>]"
         );
     }
 
     @Override
     public boolean execute(CommandSender sender, String[] args) {
         EntitySearch search = new EntitySearch(getPlugin(), sender);
-        if(args.length > 0) {
-            for(String arg : args) {
+        List<String> searchArgs = new ArrayList<>(Arrays.asList(args));
+        if (searchArgs.contains("--world")) {
+            int worldIndex = searchArgs.indexOf("--world");
+            if (worldIndex + 1 < searchArgs.size()) {
+                String worldName = searchArgs.get(worldIndex + 1);
+                if (getPlugin().getServer().getWorld(worldName) != null) {
+                    search.setWorld(worldName);
+                    searchArgs.remove(worldIndex + 1);
+                    searchArgs.remove(worldIndex);
+                } else {
+                    sender.sendMessage(ChatColor.RED + "World '" + worldName + "' not found!");
+                    return true;
+                }
+            } else {
+                sender.sendMessage(ChatColor.RED + "You need to specify a world name after --world!");
+                return true;
+            }
+        }
+
+        if(searchArgs.size() > 0) {
+            for(String arg : searchArgs) {
                 if ("--regions".equalsIgnoreCase(arg)) {
                     Plugin plugin = Bukkit.getPluginManager().getPlugin("WorldGuard");
                     if (plugin != null && plugin.isEnabled() && plugin.getDescription().getVersion().startsWith("7"))
