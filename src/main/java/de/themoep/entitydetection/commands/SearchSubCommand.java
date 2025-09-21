@@ -32,45 +32,92 @@ import java.util.List;
 public class SearchSubCommand extends SubCommand {
     public SearchSubCommand(EntityDetection plugin) {
         super(plugin, plugin.getName().toLowerCase(), "search",
-                "[monster|passive|misc|block|tile|entity|all|<type>] [--world <worldname>]"
+                "[monster|passive|misc|block|tile|entity|all|<type>] [--world <worldname>] [--exclude <type> ...]"
         );
     }
 
     @Override
     public boolean execute(CommandSender sender, String[] args) {
         EntitySearch search = new EntitySearch(getPlugin(), sender);
-        List<String> searchArgs = new ArrayList<>(Arrays.asList(args));
-        if (searchArgs.contains("--world")) {
-            int worldIndex = searchArgs.indexOf("--world");
-            if (worldIndex + 1 < searchArgs.size()) {
-                String worldName = searchArgs.get(worldIndex + 1);
-                if (getPlugin().getServer().getWorld(worldName) != null) {
-                    search.setWorld(worldName);
-                    searchArgs.remove(worldIndex + 1);
-                    searchArgs.remove(worldIndex);
-                } else {
-                    sender.sendMessage(ChatColor.RED + "World '" + worldName + "' not found!");
+        List<String> searchArgs = new ArrayList<>();
+        List<String> excludeArgs = new ArrayList<>();
+        String worldName = null;
+        boolean exclude = false;
+        boolean world = false;
+        for (String arg : args) {
+            if (arg.equalsIgnoreCase("--exclude")) {
+                exclude = true;
+                world = false;
+                continue;
+            }
+            if (arg.equalsIgnoreCase("--world")) {
+                world = true;
+                exclude = false;
+                continue;
+            }
+            if(arg.equalsIgnoreCase("--regions")) {
+                Plugin plugin = Bukkit.getPluginManager().getPlugin("WorldGuard");
+                if (plugin != null && plugin.isEnabled() && plugin.getDescription().getVersion().startsWith("7"))
+                    search.setWorldGuardRegion(true);
+                else {
+                    sender.sendMessage(ChatColor.RED + "Unable to start WorldGuard search. WorldGuard not enabled or outdated!");
                     return true;
                 }
+                if (args.length == 1) search.setType(SearchType.MONSTER);
+                continue;
+            }
+
+            if (exclude) {
+                excludeArgs.add(arg);
+            } else if (world) {
+                worldName = arg;
+                world = false;
             } else {
-                sender.sendMessage(ChatColor.RED + "You need to specify a world name after --world!");
+                searchArgs.add(arg);
+            }
+        }
+
+        for (String arg : excludeArgs) {
+            if (arg.endsWith("s")) {
+                arg = arg.substring(0, arg.length() - 1);
+            }
+            boolean found = false;
+            if (!found) {
+                try {
+                    search.addExcludedType(EntityType.valueOf(arg.toUpperCase()));
+                    found = true;
+                } catch (IllegalArgumentException ignored) {}
+            }
+            if (!found) {
+                try {
+                    search.addExcludedBlockState(Class.forName("org.bukkit.block." + arg, false, getPlugin().getServer().getClass().getClassLoader()));
+                    found = true;
+                } catch (ClassNotFoundException ignored) {}
+            }
+            if (!found) {
+                try {
+                    search.addExcludedMaterial(Material.valueOf(arg.toUpperCase()));
+                    found = true;
+                } catch (IllegalArgumentException ignored) {}
+            }
+            if (!found) {
+                sender.sendMessage(ChatColor.RED + "Could not find a type to exclude for '" + arg + "'!");
+            }
+        }
+
+
+        if (worldName != null) {
+            if (getPlugin().getServer().getWorld(worldName) != null) {
+                search.setWorld(worldName);
+            } else {
+                sender.sendMessage(ChatColor.RED + "World '" + worldName + "' not found!");
                 return true;
             }
         }
 
+
         if(searchArgs.size() > 0) {
             for(String arg : searchArgs) {
-                if ("--regions".equalsIgnoreCase(arg)) {
-                    Plugin plugin = Bukkit.getPluginManager().getPlugin("WorldGuard");
-                    if (plugin != null && plugin.isEnabled() && plugin.getDescription().getVersion().startsWith("7"))
-                        search.setWorldGuardRegion(true);
-                    else {
-                        sender.sendMessage(ChatColor.RED + "Unable to start WorldGuard search. WorldGuard not enabled or outdated!");
-                        return true;
-                    }
-                    if (args.length == 1) search.setType(SearchType.MONSTER);
-                    continue;
-                }
                 if (arg.endsWith("s")) {
                     arg = arg.substring(0, arg.length() - 1);
                 }
