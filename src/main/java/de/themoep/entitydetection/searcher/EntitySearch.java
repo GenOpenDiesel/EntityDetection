@@ -41,6 +41,9 @@ public class EntitySearch extends BukkitRunnable {
     private Set<EntityType> searchedEntities = new HashSet<EntityType>();
     private Set<Class<?>> searchedBlockStates = new HashSet<Class<?>>();
     private Set<Material> searchedMaterial = new HashSet<Material>();
+    private Set<EntityType> excludedEntities = new HashSet<>();
+    private Set<Class<?>> excludedBlockStates = new HashSet<>();
+    private Set<Material> excludedMaterial = new HashSet<>();
     private long startTime;
     private boolean running = true;
     private List<Entity> entities = new ArrayList<Entity>();
@@ -81,6 +84,18 @@ public class EntitySearch extends BukkitRunnable {
     public void addSearchedMaterial(Material material) {
         searchedMaterial.add(material);
         this.type = SearchType.CUSTOM;
+    }
+
+    public void addExcludedType(EntityType type) {
+        excludedEntities.add(type);
+    }
+
+    public void addExcludedBlockState(Class<?> c) {
+        excludedBlockStates.add(c);
+    }
+
+    public void addExcludedMaterial(Material material) {
+        excludedMaterial.add(material);
     }
 
     public Set<EntityType> getSearchedEntities() {
@@ -173,7 +188,7 @@ public class EntitySearch extends BukkitRunnable {
             if(!running) {
                 return;
             }
-            if(searchedEntities.contains(e.getType())) {
+            if(searchedEntities.contains(e.getType()) && !excludedEntities.contains(e.getType())) {
                 result.addEntity(e);
             }
         }
@@ -182,7 +197,11 @@ public class EntitySearch extends BukkitRunnable {
             if (!running) {
                 return;
             }
-            if (searchedBlockStates.contains(BlockState.class) || searchedMaterial.contains(blockState.getType()) || searchedBlockStates.contains(blockState.getClass())) {
+
+            boolean isSearched = searchedBlockStates.contains(BlockState.class) || searchedMaterial.contains(blockState.getType()) || searchedBlockStates.contains(blockState.getClass());
+            boolean isExcluded = excludedMaterial.contains(blockState.getType()) || excludedBlockStates.contains(blockState.getClass());
+
+            if (isSearched && !isExcluded) {
                 result.addBlockState(blockState);
             }
         }
