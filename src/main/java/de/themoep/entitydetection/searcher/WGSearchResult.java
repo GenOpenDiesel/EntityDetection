@@ -62,7 +62,7 @@ public class WGSearchResult extends SearchResult<WGSearchResult.ProtectedRegionE
                         entry.getLocation().region.getMaximumPoint().subtract(entry.getLocation().region.getMinimumPoint()).divide(2)));
             }
 
-            sender.teleport(loc, PlayerTeleportEvent.TeleportCause.PLUGIN);
+            scheduler.teleportAsync(sender, loc, PlayerTeleportEvent.TeleportCause.PLUGIN);
             sender.sendMessage(
                     ChatColor.GREEN + "Teleported to entry " + ChatColor.WHITE + i + ": " +
                             ChatColor.YELLOW + entry.getLocation().region.getId() + " " + ChatColor.RED + entry.getSize() + " " +

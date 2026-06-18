@@ -1,5 +1,6 @@
 package de.themoep.entitydetection.searcher;
 
+import com.tcoded.folialib.impl.PlatformScheduler;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.BlockState;
@@ -31,6 +32,7 @@ import java.util.Set;
  * along with this program. If not, see <http://mozilla.org/MPL/2.0/>.
  */
 public abstract class SearchResult<T> {
+    protected final PlatformScheduler scheduler;
     private SearchType type;
     private Set<String> searched;
     private long startTime;
@@ -47,6 +49,7 @@ public abstract class SearchResult<T> {
     protected List<SearchResultEntry<T>> resultEntryList = new ArrayList<>();
 
     public SearchResult(EntitySearch search) {
+        scheduler = search.getScheduler();
         type = search.getType();
         searched = new HashSet<String>();
         for (EntityType e : search.getSearchedEntities()) {
