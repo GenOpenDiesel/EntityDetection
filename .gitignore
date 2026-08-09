@@ -4,3 +4,6 @@
 out
 gen
 target
+
+# Maven shade plugin byproduct
+dependency-reduced-pom.xml

@@ -32,7 +32,7 @@ import java.util.List;
 public class SearchSubCommand extends SubCommand {
     public SearchSubCommand(EntityDetection plugin) {
         super(plugin, plugin.getName().toLowerCase(), "search",
-                "[monster|passive|misc|block|tile|entity|all|<type>] [--world <worldname>] [--exclude <type> ...]"
+                "[monster|passive|misc|block|display|tile|entity|all|<type>] [--world <worldname>] [--exclude <type> ...]"
         );
     }
 

@@ -23,7 +23,7 @@ This plugin does not require any other plugin to run, but it requires [Paper](ht
 
 ### Commands
 
-- `/detect search [monster|passive|misc|block|tile|entity|all|<type>]`
+- `/detect search [monster|passive|misc|block|display|tile|entity|all|<type>]`
     - The main plugin command. Start a search for chunks with lots of entities in it. Without any type it searches for Monsters but you can also search for a specific type of entities (take a look at the different types below) or for single [entity types](https://jd.papermc.io/paper/1.21.4/org/bukkit/entity/EntityType.html). With version 1.1 you can also search for Hopper and other blockstates! You can also combine different types by just inputting them after each other separated by a space. When the search is finished you will get a list for all chunks sorted by their entity count.
 
 - `/detect search --regions [<type>]`
@@ -50,6 +50,9 @@ This plugin does not require any other plugin to run, but it requires [Paper](ht
 
 ##### Block (More like pseudo-block but that's too long)
  Entities that behave more like blocks than entities: armor stands, ender crystals, paintings, item frames and falling blocks.
+
+#### Display (aliases: displays, hologram, decoration)
+ The display entities used by hologram and decoration plugins: block displays, item displays, text displays, interactions and markers.
 
 #### Entity
  Search for all the entities, no matter what type they are

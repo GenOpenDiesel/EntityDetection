@@ -26,7 +26,7 @@ import org.bukkit.entity.EntityType;
 public class ListSubCommand extends SubCommand {
     public ListSubCommand(EntityDetection plugin) {
         super(plugin, plugin.getName().toLowerCase(), "list",
-                "[<page> [monster|passive|misc|block|tile|all|<type>]]"
+                "[<page> [monster|passive|misc|block|display|tile|all|<type>]]"
         );
     }
 

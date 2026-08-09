@@ -3,6 +3,7 @@ package de.themoep.entitydetection.searcher;
 import org.bukkit.block.BlockState;
 import org.bukkit.entity.Ambient;
 import org.bukkit.entity.Animals;
+import org.bukkit.entity.Boat;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Golem;
@@ -15,6 +16,7 @@ import org.bukkit.entity.Projectile;
 import org.bukkit.entity.Slime;
 import org.bukkit.entity.WaterMob;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -55,24 +57,25 @@ public enum SearchType {
             }
     ),
     MISC(
-            new EntityType[]{
-                    EntityType.FIREWORK,
-                    EntityType.ENDER_SIGNAL,
-                    EntityType.BOAT
-            },
+            // Names changed over the versions: FIREWORK -> FIREWORK_ROCKET, ENDER_SIGNAL -> EYE_OF_ENDER
+            types("FIREWORK_ROCKET", "FIREWORK", "EYE_OF_ENDER", "ENDER_SIGNAL"),
             new Class[]{
                     Projectile.class,
                     Minecart.class,
-                    Item.class
+                    Item.class,
+                    Boat.class // Covers the per-wood boat types that replaced EntityType.BOAT in 1.21.3
             }
     ),
     BLOCK(
-            new EntityType[]{
-                    EntityType.ARMOR_STAND,
-                    EntityType.FALLING_BLOCK,
-                    EntityType.ENDER_CRYSTAL
-            },
+            // ENDER_CRYSTAL was renamed to END_CRYSTAL in 1.20.5
+            types("ARMOR_STAND", "FALLING_BLOCK", "END_CRYSTAL", "ENDER_CRYSTAL"),
             new Class[]{Hanging.class}
+    ),
+    DISPLAY(
+            new String[]{"DISPLAYS", "HOLOGRAM", "DECORATION"},
+            // Display entities only exist since 1.19.4, interactions/markers since 1.19.4/1.17
+            types("BLOCK_DISPLAY", "ITEM_DISPLAY", "TEXT_DISPLAY", "INTERACTION", "MARKER"),
+            classes("Display", "Interaction", "Marker")
     ),
     ENTITY(
             new String[]{"ENTITIES"},
@@ -118,10 +121,20 @@ public enum SearchType {
             }
         }
         entityTypes = typeSet.toArray(new EntityType[typeSet.size()]);
-        blockStates = classList.toArray(new Class[classList.size()]);
+
+        // Only actual block state classes are of use when scanning tile entities. Keeping the entity
+        // interfaces in here would make every search walk all tile entities of all loaded chunks
+        // without a single one of them ever being able to match.
+        List<Class> stateList = new LinkedList<Class>();
+        for (Class eClass : classList) {
+            if (BlockState.class.isAssignableFrom(eClass)) {
+                stateList.add(eClass);
+            }
+        }
+        blockStates = stateList.toArray(new Class[stateList.size()]);
     }
 
-    SearchType(Class<? extends Entity>[] classes) {
+    SearchType(Class<?>[] classes) {
         this(new String[]{}, new EntityType[]{}, classes);
     }
 
@@ -129,11 +142,11 @@ public enum SearchType {
         this(new String[]{}, types, new Class[]{});
     }
 
-    SearchType(String[] aliases, Class<? extends Entity>[] classes) {
+    SearchType(String[] aliases, Class<?>[] classes) {
         this(aliases, new EntityType[]{}, classes);
     }
 
-    SearchType(EntityType[] types, Class<? extends Entity>[] classes) {
+    SearchType(EntityType[] types, Class<?>[] classes) {
         this(new String[]{}, types, classes);
     }
 
@@ -143,6 +156,46 @@ public enum SearchType {
 
     SearchType() {
         this(new String[]{}, new EntityType[]{}, new Class[]{});
+    }
+
+    /**
+     * Look up entity types by name, silently skipping the ones that don't exist on the running server.
+     * This plugin is built against an old API version while entity type constants get renamed
+     * (e.g. FIREWORK -&gt; FIREWORK_ROCKET) or added (e.g. BLOCK_DISPLAY) in newer versions, so
+     * referencing them directly would either not compile or blow up with a NoSuchFieldError.
+     *
+     * @param names The names to look up, list renamed constants next to each other
+     * @return An array of all entity types that exist on this server
+     */
+    private static EntityType[] types(String... names) {
+        List<EntityType> found = new ArrayList<EntityType>();
+        for (String name : names) {
+            try {
+                found.add(EntityType.valueOf(name));
+            } catch (IllegalArgumentException ignored) {
+                // Doesn't exist on this version
+            }
+        }
+        return found.toArray(new EntityType[found.size()]);
+    }
+
+    /**
+     * Look up entity interfaces by their simple name, silently skipping the ones that don't exist
+     * on the running server. Same reasoning as {@link #types(String...)}.
+     *
+     * @param names The simple names of interfaces in the org.bukkit.entity package
+     * @return An array of all classes that exist on this server
+     */
+    private static Class<?>[] classes(String... names) {
+        List<Class<?>> found = new ArrayList<Class<?>>();
+        for (String name : names) {
+            try {
+                found.add(Class.forName("org.bukkit.entity." + name));
+            } catch (ClassNotFoundException ignored) {
+                // Doesn't exist on this version
+            }
+        }
+        return found.toArray(new Class<?>[found.size()]);
     }
 
     /**
