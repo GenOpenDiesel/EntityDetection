@@ -10,6 +10,13 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.EntityType;
 import org.bukkit.plugin.Plugin;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+
 /**
  * Copyright 2016 Max Lee (https://github.com/Phoenix616/)
  * <p/>
@@ -93,5 +100,44 @@ public class SearchSubCommand extends SubCommand {
             sender.sendMessage(ChatColor.YELLOW + search.getOwner() + ChatColor.RED + " already started a search!");
         }
         return true;
+    }
+
+    @Override
+    public List<String> tabComplete(CommandSender sender, String[] args) {
+        String current = args.length == 0 ? "" : args[args.length - 1].toLowerCase(Locale.ROOT);
+        Set<String> candidates = new LinkedHashSet<>();
+
+        candidates.add("--regions");
+        for (SearchType type : SearchType.values()) {
+            if (type != SearchType.CUSTOM) {
+                candidates.add(type.name().toLowerCase(Locale.ROOT));
+            }
+            for (String alias : type.getAliases()) {
+                candidates.add(alias.toLowerCase(Locale.ROOT));
+            }
+        }
+        for (EntityType type : EntityType.values()) {
+            candidates.add(type.name().toLowerCase(Locale.ROOT));
+        }
+        for (Material material : Material.values()) {
+            if (material.isBlock() && !material.isLegacy()) {
+                candidates.add(material.name().toLowerCase(Locale.ROOT));
+            }
+        }
+
+        if (args.length > 1) {
+            for (int i = 0; i < args.length - 1; i++) {
+                candidates.remove(args[i].toLowerCase(Locale.ROOT));
+            }
+        }
+
+        List<String> suggestions = new ArrayList<>();
+        for (String candidate : candidates) {
+            if (candidate.startsWith(current)) {
+                suggestions.add(candidate);
+            }
+        }
+        suggestions.sort(Comparator.naturalOrder());
+        return suggestions;
     }
 }

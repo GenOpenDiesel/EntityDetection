@@ -163,6 +163,15 @@ public enum SearchType {
     }
 
     /**
+     * Get the aliases accepted by the search command for this type.
+     *
+     * @return A copy of this type's aliases
+     */
+    public String[] getAliases() {
+        return aliases.clone();
+    }
+
+    /**
      * Get all the entity types that belong to this search type
      *
      * @return An Array of EntityTypes, CUSTOM's list is empty and should be filled by you per search

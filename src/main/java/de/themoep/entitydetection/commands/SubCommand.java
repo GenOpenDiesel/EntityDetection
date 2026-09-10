@@ -5,6 +5,9 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.permissions.Permission;
 import org.bukkit.permissions.PermissionDefault;
 
+import java.util.Collections;
+import java.util.List;
+
 /**
  * Copyright 2016 Max Lee (https://github.com/Phoenix616/)
  * <p/>
@@ -40,6 +43,17 @@ public abstract class SubCommand {
     }
 
     public abstract boolean execute(CommandSender sender, String[] args);
+
+    /**
+     * Get tab completion suggestions for this subcommand's arguments.
+     *
+     * @param sender The sender requesting completions
+     * @param args The arguments after the subcommand path
+     * @return The suggestions to show; an empty list disables Bukkit's player-name fallback
+     */
+    public List<String> tabComplete(CommandSender sender, String[] args) {
+        return Collections.emptyList();
+    }
 
     public String getCommand() {
         return command;

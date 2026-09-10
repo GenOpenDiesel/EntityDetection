@@ -7,10 +7,17 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.PluginCommand;
+import org.bukkit.command.TabCompleter;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -29,7 +36,7 @@ import java.util.Set;
  * You should have received a copy of the Mozilla Public License v2.0
  * along with this program. If not, see <http://mozilla.org/MPL/2.0/>.
  */
-public class PluginCommandExecutor implements CommandExecutor {
+public class PluginCommandExecutor implements CommandExecutor, TabCompleter {
     private final EntityDetection plugin;
 
     private final Map<String, Map<String, SubCommand>> subCommands = new HashMap<>();
@@ -40,7 +47,9 @@ public class PluginCommandExecutor implements CommandExecutor {
         header = Component.text(plugin.getDescription().getAuthors().get(0) + "'s ").color(NamedTextColor.GRAY)
                 .append(Component.text(plugin.getName()).color(NamedTextColor.RED))
                 .append(Component.text(" v" + plugin.getDescription().getVersion()).color(NamedTextColor.GRAY));
-        plugin.getCommand(plugin.getName().toLowerCase()).setExecutor(this);
+        PluginCommand command = plugin.getCommand(plugin.getName().toLowerCase());
+        command.setExecutor(this);
+        command.setTabCompleter(this);
     }
 
     public void register(SubCommand sub) {
@@ -118,5 +127,47 @@ public class PluginCommandExecutor implements CommandExecutor {
             sender.sendMessage(plugin.getMessage(sender, "help.usage", "usage", sub.getUsage(label)));
         }
         return true;
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command cmd, String alias, String[] args) {
+        Map<String, SubCommand> commands = subCommands.get(cmd.getName());
+        if (commands == null || args.length == 0) {
+            return Collections.emptyList();
+        }
+
+        List<String> suggestions = new ArrayList<>();
+        for (SubCommand sub : commands.values()) {
+            if (!sender.hasPermission(sub.getPermission())) {
+                continue;
+            }
+
+            String[] pathParts = sub.getPath().split(" ");
+            int completedParts = args.length - 1;
+            int comparableParts = Math.min(completedParts, pathParts.length);
+            boolean pathMatches = true;
+            for (int i = 0; i < comparableParts; i++) {
+                if (!pathParts[i].equalsIgnoreCase(args[i])) {
+                    pathMatches = false;
+                    break;
+                }
+            }
+            if (!pathMatches) {
+                continue;
+            }
+
+            if (args.length <= pathParts.length) {
+                String current = args[args.length - 1].toLowerCase(Locale.ROOT);
+                String pathPart = pathParts[args.length - 1];
+                if (pathPart.toLowerCase(Locale.ROOT).startsWith(current)) {
+                    suggestions.add(pathPart);
+                }
+            } else {
+                suggestions.addAll(sub.tabComplete(sender, Arrays.copyOfRange(args, pathParts.length, args.length)));
+            }
+        }
+
+        suggestions.sort(Comparator.naturalOrder());
+        return suggestions;
     }
 }
