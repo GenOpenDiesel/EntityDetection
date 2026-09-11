@@ -6,10 +6,14 @@ import de.themoep.entitydetection.searcher.SearchType;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
+import org.bukkit.block.TileState;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.EntityType;
 import org.bukkit.plugin.Plugin;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -33,10 +37,13 @@ import java.util.Set;
  * along with this program. If not, see <http://mozilla.org/MPL/2.0/>.
  */
 public class SearchSubCommand extends SubCommand {
+    private final Method createBlockStateMethod;
+
     public SearchSubCommand(EntityDetection plugin) {
         super(plugin, plugin.getName().toLowerCase(), "search",
                 "[monster|passive|misc|block|tile|entity|all|<type>]"
         );
+        createBlockStateMethod = findCreateBlockStateMethod();
     }
 
     @Override
@@ -120,7 +127,7 @@ public class SearchSubCommand extends SubCommand {
             candidates.add(type.name().toLowerCase(Locale.ROOT));
         }
         for (Material material : Material.values()) {
-            if (material.isBlock() && !material.isLegacy()) {
+            if (material.isBlock() && !material.isLegacy() && isTileEntityMaterial(material)) {
                 candidates.add(material.name().toLowerCase(Locale.ROOT));
             }
         }
@@ -139,5 +146,28 @@ public class SearchSubCommand extends SubCommand {
         }
         suggestions.sort(Comparator.naturalOrder());
         return suggestions;
+    }
+
+    private Method findCreateBlockStateMethod() {
+        try {
+            return BlockData.class.getMethod("createBlockState");
+        } catch (NoSuchMethodException ignored) {
+            // BlockData#createBlockState was added after the oldest supported Paper version.
+            return null;
+        }
+    }
+
+    private boolean isTileEntityMaterial(Material material) {
+        if (createBlockStateMethod == null) {
+            // Preserve completion support on older servers where the API cannot expose this information.
+            return true;
+        }
+
+        try {
+            return createBlockStateMethod.invoke(material.createBlockData()) instanceof TileState;
+        } catch (IllegalAccessException | InvocationTargetException | IllegalArgumentException ignored) {
+            // Do not hide a valid material if another server implementation cannot create its state here.
+            return true;
+        }
     }
 }
