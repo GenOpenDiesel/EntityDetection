@@ -138,7 +138,12 @@ public class EntitySearch implements Consumer<WrappedTask> {
                 scheduler.runAtLocation(world.getSpawnLocation(), task -> {
                     try {
                         for (Entity entity : world.getEntities()) {
-                            entities.put(entity.getType(), entity.getLocation());
+                            EntityType entityType = entity.getType();
+                            if (searchedEntities.contains(entityType)) {
+                                synchronized (entities) {
+                                    entities.put(entityType, entity.getLocation());
+                                }
+                            }
                         }
                     } finally {
                         if (pending.decrementAndGet() == 0) {
@@ -156,12 +161,20 @@ public class EntitySearch implements Consumer<WrappedTask> {
                     scheduler.runAtLocation(chunk.getBlock(0, 0, 0).getLocation(), task -> {
                         try {
                             for (BlockState state : chunk.getTileEntities(false)) {
-                                Multimap<Class, Location> multiMap = blockStates.get(state.getType());
-                                if (multiMap == null) {
-                                    multiMap = MultimapBuilder.hashKeys().arrayListValues().build();
-                                    blockStates.put(state.getType(), multiMap);
+                                Material material = state.getType();
+                                Class<?> stateClass = state.getClass();
+                                if (searchedBlockStates.contains(BlockState.class)
+                                        || searchedMaterial.contains(material)
+                                        || searchedBlockStates.contains(stateClass)) {
+                                    synchronized (blockStates) {
+                                        Multimap<Class, Location> multiMap = blockStates.get(material);
+                                        if (multiMap == null) {
+                                            multiMap = MultimapBuilder.hashKeys().arrayListValues().build();
+                                            blockStates.put(material, multiMap);
+                                        }
+                                        multiMap.put(stateClass, state.getLocation());
+                                    }
                                 }
-                                multiMap.put(state.getClass(), state.getLocation());
                             }
                         } finally {
                             if (pending.decrementAndGet() == 0) {
