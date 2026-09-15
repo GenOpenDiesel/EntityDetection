@@ -172,7 +172,10 @@ public class EntitySearch implements Consumer<WrappedTask> {
                 scheduler.runAtLocation(world.getSpawnLocation(), task -> {
                     try {
                         for (Entity entity : world.getEntities()) {
-                            entities.put(entity.getType(), entity.getLocation());
+                            EntityType entityType = entity.getType();
+                            if (searchedEntities.contains(entityType) && !excludedEntities.contains(entityType)) {
+                                entities.put(entityType, entity.getLocation());
+                            }
                         }
                     } finally {
                         if (pending.decrementAndGet() == 0) {
@@ -189,10 +192,19 @@ public class EntitySearch implements Consumer<WrappedTask> {
                     scheduled++;
                     scheduler.runAtLocation(chunk.getBlock(0, 0, 0).getLocation(), task -> {
                         try {
-                            for (BlockState state : chunk.getTileEntities()) {
-                                Multimap<Class, Location> multiMap = blockStates.computeIfAbsent(state.getType(),
-                                        k -> Multimaps.synchronizedMultimap(MultimapBuilder.hashKeys().arrayListValues().build()));
-                                multiMap.put(state.getClass(), state.getLocation());
+                            for (BlockState state : chunk.getTileEntities(false)) {
+                                Material material = state.getType();
+                                Class<?> stateClass = state.getClass();
+                                boolean isSearched = searchedBlockStates.contains(BlockState.class)
+                                        || searchedMaterial.contains(material)
+                                        || searchedBlockStates.contains(stateClass);
+                                boolean isExcluded = excludedMaterial.contains(material)
+                                        || excludedBlockStates.contains(stateClass);
+                                if (isSearched && !isExcluded) {
+                                    Multimap<Class, Location> multiMap = blockStates.computeIfAbsent(material,
+                                            k -> Multimaps.synchronizedMultimap(MultimapBuilder.hashKeys().arrayListValues().build()));
+                                    multiMap.put(stateClass, state.getLocation());
+                                }
                             }
                         } finally {
                             if (pending.decrementAndGet() == 0) {
