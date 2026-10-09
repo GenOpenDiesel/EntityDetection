@@ -1,5 +1,7 @@
 package de.themoep.entitydetection;
 
+import org.bukkit.entity.EntityType;
+
 /**
  * Copyright 2016 Max Lee (https://github.com/Phoenix616/)
  * <p/>
@@ -16,6 +18,22 @@ package de.themoep.entitydetection;
  * along with this program. If not, see <http://mozilla.org/MPL/2.0/>.
  */
 public class Utils {
+
+    /** Resolve an entity name before trying the old optional plural spelling. */
+    public static EntityType findEntityType(String name) {
+        try {
+            return EntityType.valueOf(name.toUpperCase());
+        } catch (IllegalArgumentException ignored) {
+            if (name.length() > 1 && name.endsWith("s")) {
+                try {
+                    return EntityType.valueOf(name.substring(0, name.length() - 1).toUpperCase());
+                } catch (IllegalArgumentException ignoredPlural) {
+                    // No matching entity on this server version.
+                }
+            }
+            return null;
+        }
+    }
 
     /**
      * Capitalize a string

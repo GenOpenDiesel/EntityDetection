@@ -41,6 +41,8 @@ import java.util.Set;
  */
 public enum SearchType {
     MONSTER(
+            // These undead mounts implement Animals in Paper, so class matching alone misses them.
+            types("ZOMBIE_NAUTILUS", "CAMEL_HUSK", "ZOMBIE_HORSE"),
             new Class[]{
                     Monster.class,
                     Slime.class
@@ -54,7 +56,8 @@ public enum SearchType {
                     NPC.class,
                     WaterMob.class,
                     Golem.class
-            }
+            },
+            types("ZOMBIE_NAUTILUS", "CAMEL_HUSK", "ZOMBIE_HORSE")
     ),
     MISC(
             // Names changed over the versions: FIREWORK -> FIREWORK_ROCKET, ENDER_SIGNAL -> EYE_OF_ENDER
@@ -97,6 +100,10 @@ public enum SearchType {
     private Class<?>[] blockStates;
 
     SearchType(String[] aliases, EntityType[] eTypes, Class[] classes) {
+        this(aliases, eTypes, classes, new EntityType[]{});
+    }
+
+    SearchType(String[] aliases, EntityType[] eTypes, Class[] classes, EntityType[] excludedTypes) {
         this.aliases = aliases;
         Set<EntityType> typeSet = new HashSet<EntityType>();
         Collections.addAll(typeSet, eTypes);
@@ -120,6 +127,7 @@ public enum SearchType {
                 }
             }
         }
+        typeSet.removeAll(Arrays.asList(excludedTypes));
         entityTypes = typeSet.toArray(new EntityType[typeSet.size()]);
 
         // Only actual block state classes are of use when scanning tile entities. Keeping the entity
@@ -148,6 +156,10 @@ public enum SearchType {
 
     SearchType(EntityType[] types, Class<?>[] classes) {
         this(new String[]{}, types, classes);
+    }
+
+    SearchType(String[] aliases, Class<?>[] classes, EntityType[] excludedTypes) {
+        this(aliases, new EntityType[]{}, classes, excludedTypes);
     }
 
     SearchType(String[] aliases, EntityType[] entityTypes) {

@@ -1,6 +1,7 @@
 package de.themoep.entitydetection.commands;
 
 import de.themoep.entitydetection.EntityDetection;
+import de.themoep.entitydetection.Utils;
 import de.themoep.entitydetection.searcher.EntitySearch;
 import de.themoep.entitydetection.searcher.SearchType;
 import org.bukkit.Bukkit;
@@ -78,16 +79,13 @@ public class SearchSubCommand extends SubCommand {
         }
 
         for (String arg : excludeArgs) {
-            if (arg.endsWith("s")) {
-                arg = arg.substring(0, arg.length() - 1);
-            }
             boolean found = false;
-            if (!found) {
-                try {
-                    search.addExcludedType(EntityType.valueOf(arg.toUpperCase()));
-                    found = true;
-                } catch (IllegalArgumentException ignored) {}
+            EntityType entityType = Utils.findEntityType(arg);
+            if (entityType != null) {
+                search.addExcludedType(entityType);
+                found = true;
             }
+            if (!found && arg.endsWith("s")) arg = arg.substring(0, arg.length() - 1);
             if (!found) {
                 try {
                     search.addExcludedBlockState(Class.forName("org.bukkit.block." + arg, false, getPlugin().getServer().getClass().getClassLoader()));
@@ -118,16 +116,13 @@ public class SearchSubCommand extends SubCommand {
 
         if(searchArgs.size() > 0) {
             for(String arg : searchArgs) {
-                if (arg.endsWith("s")) {
-                    arg = arg.substring(0, arg.length() - 1);
-                }
                 boolean found = false;
-                if (!found) {
-                    try {
-                        search.addSearchedType(EntityType.valueOf(arg.toUpperCase()));
-                        found = true;
-                    } catch (IllegalArgumentException ignored) {}
+                EntityType entityType = Utils.findEntityType(arg);
+                if (entityType != null) {
+                    search.addSearchedType(entityType);
+                    found = true;
                 }
+                if (!found && arg.endsWith("s")) arg = arg.substring(0, arg.length() - 1);
                 if (!found) {
                     try {
                         search.addSearchedBlockState(Class.forName("org.bukkit.block." + arg, false, getPlugin().getServer().getClass().getClassLoader())); //TODO: This is case sensitive :(

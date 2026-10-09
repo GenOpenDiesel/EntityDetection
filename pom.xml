@@ -15,6 +15,7 @@
         <minecraft.plugin.version>${project.version} ${buildDescription}</minecraft.plugin.version>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
+        <paper.api.version>1.17.1-R0.1-SNAPSHOT</paper.api.version>
     </properties>
 
     <repositories>
@@ -40,7 +41,7 @@
         <dependency>
             <groupId>io.papermc.paper</groupId>
             <artifactId>paper-api</artifactId>
-            <version>1.17.1-R0.1-SNAPSHOT</version>
+            <version>${paper.api.version}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
@@ -72,6 +73,12 @@
             <artifactId>minedown-adventure</artifactId>
             <version>1.7.3-SNAPSHOT</version>
             <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.12</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 

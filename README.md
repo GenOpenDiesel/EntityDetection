@@ -42,8 +42,12 @@ This plugin does not require any other plugin to run, but it requires [Paper](ht
 #### Monster
 > All the monsters and slimes
 
+ On Paper 1.21.11+, this also includes the zombie nautilus, camel husk and zombie horse. These undead mounts implement animal interfaces in the API.
+
 #### Passive
  All the animals, NPCs and golems as well as ambient and water mobs
+
+ New mobs such as the nautilus, happy ghast and copper golem are included automatically when the server supports them.
 
 #### Misc
  Everything that is not a real mob: fireworks, boats, minecarts, projectiles, dropped items, ender signals and lightning strikes.
@@ -68,6 +72,8 @@ This plugin does not require any other plugin to run, but it requires [Paper](ht
 
 #### <[EntityType](https://jd.papermc.io/paper/1.21.4/org/bukkit/entity/EntityType.html)>
  You can also search for the specific Bukkit entity type! Every single one is supported and can be combined with the other search types.
+
+ For example, on Paper 1.21.11+ use `/detect search nautilus` or `/detect search zombie_nautilus`. Entity names ending in `s` are recognized without losing their final letter.
 
 If you have ideas how one of the types could be improved or for a new one just respond to the discussion thread or directly submit a pull request for a modification of the [SearchType enum](https://github.com/minebench/entitydetection/blob/master/src/main/java/de/themoep/entitydetection/searcher/searchtype.java)!
 

@@ -1,6 +1,7 @@
 package de.themoep.entitydetection.commands;
 
 import de.themoep.entitydetection.EntityDetection;
+import de.themoep.entitydetection.Utils;
 import de.themoep.entitydetection.searcher.SearchResult;
 import de.themoep.entitydetection.searcher.SearchType;
 import org.bukkit.ChatColor;
@@ -46,18 +47,13 @@ public class ListSubCommand extends SubCommand {
                 lastName = args[1];
 
                 String arg = args[1];
-
-                if(arg.endsWith("s")) {
-                    arg = arg.substring(0, arg.length() - 1);
-                }
-
                 boolean found = false;
-                if (!found) {
-                    try {
-                        result = getPlugin().getResult(EntityType.valueOf(arg.toUpperCase()).toString());
-                        found = true;
-                    } catch (IllegalArgumentException ignored) {}
+                EntityType entityType = Utils.findEntityType(arg);
+                if (entityType != null) {
+                    result = getPlugin().getResult(entityType.toString());
+                    found = true;
                 }
+                if (!found && arg.endsWith("s")) arg = arg.substring(0, arg.length() - 1);
                 if (!found) {
                     try {
                         result = getPlugin().getResult(Class.forName("org.bukkit.block." + arg, false, getPlugin().getServer().getClass().getClassLoader()).getSimpleName()); //TODO: This is case sensitive :(
