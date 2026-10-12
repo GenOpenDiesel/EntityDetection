@@ -5,7 +5,7 @@ api-version: 1.17
 folia-supported: true
 description: '${project.description}'
 softdepend: ["WorldGuard"]
-authors: [Phoenix616]
+authors: [genallthebest]
 commands:
    entitydetection:
       aliases: [detect]
